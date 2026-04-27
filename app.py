@@ -35,8 +35,12 @@ if st.sidebar.button("Get Data"):
     if df.empty:
         st.error("No data found. Please check the ticker symbol or date range.")
     else:
-        # Show success message
         st.success(f"Data successfully extracted for {ticker}")
+
+        # --- FIX: Calculate Moving Average columns for the dataframe ---
+        df["ma_5"] = df["Close"].rolling(window=5).mean()
+        df["ma_20"] = df["Close"].rolling(window=20).mean()
+        df["ma_50"] = df["Close"].rolling(window=50).mean()
 
         # Trend Analysis
         st.subheader("Trend Analysis")
@@ -44,13 +48,15 @@ if st.sidebar.button("Get Data"):
         # 1. Get current price and moving averages
         close = df["Close"].squeeze()
         current_price = close.iloc[-1]
-        ma_20 = close.iloc[-20:].mean()
-        ma_50 = close.iloc[-50:].mean()
+        
+        # Pull the most recent moving average values from the new columns
+        ma_20_current = df["ma_20"].iloc[-1]
+        ma_50_current = df["ma_50"].iloc[-1]
 
         # 2. Determine the Trend
-        if current_price > ma_20 and current_price > ma_50:
+        if current_price > ma_20_current and current_price > ma_50_current:
             trend = "Upward Trend"
-        elif current_price < ma_20 and current_price < ma_50:
+        elif current_price < ma_20_current and current_price < ma_50_current:
             trend = "Downward Trend"
         else:
             trend = "Mixed Trend"
@@ -64,15 +70,15 @@ if st.sidebar.button("Get Data"):
         avg_loss = losses.iloc[-14:].mean()
 
         if avg_loss == 0:
-            rsi = 100.0  # Fixed: explicitly define rsi here
+            rsi = 100.0  
         else:
             rs = avg_gain / avg_loss
             rsi = 100 - (100 / (1 + rs))
 
         # 4. Display the results beautifully formatted to 2 decimal places
         st.write(f"**Current Price:** ${current_price:.2f}")
-        st.write(f"**20 Day Moving Average:** ${ma_20:.2f}")
-        st.write(f"**50 Day Moving Average:** ${ma_50:.2f}")
+        st.write(f"**20 Day Moving Average:** ${ma_20_current:.2f}")
+        st.write(f"**50 Day Moving Average:** ${ma_50_current:.2f}")
         st.write(f"**Trend:** {trend}")
         
         # Momentum
@@ -99,9 +105,10 @@ if st.sidebar.button("Get Data"):
         ax.set_title(f"{ticker} Closing Price")
         st.pyplot(fig)
         
-        st.subheader("Closing Price")
+        # Plot the closing price with MAs
+        st.subheader("Closing Price with Moving Averages")
         fig, ax = plt.subplots()
-        # Plot all three lines
+        # Plot all three lines using the new columns
         ax.plot(df.index, df["Close"], label="Closing Price", color="blue")
         ax.plot(df.index, df["ma_5"], label="5-Day MA", color="orange", linestyle="--")
         ax.plot(df.index, df["ma_20"], label="20-Day MA", color="green", linestyle="--")
@@ -109,12 +116,9 @@ if st.sidebar.button("Get Data"):
         # Format the chart
         ax.set_xlabel("Date")
         ax.set_ylabel("Price")
-        ax.set_title(f"{ticker} Closing Price")
-        ax.set_title(f"{ticker} Closing Price")
+        ax.set_title(f"{ticker} Closing Price & Moving Averages")
+        ax.legend() # FIX: Added legend so your line labels appear
         st.pyplot(fig)
-        
-        plt.plot(df["MA_5"], label="ma_5")
-        plt.plot(df["MA_20"], label="ma_20")
 
         # Calculate daily returns
         daily_returns = close.pct_change()
@@ -145,6 +149,7 @@ if st.sidebar.button("Get Data"):
             file_name=f"{ticker}_stock_data.csv",
             mime="text/csv"
         )
+
         # ------------------------------------------------
         # Step 5: Final Trading Recommendation
         # ------------------------------------------------
