@@ -103,8 +103,8 @@ if st.sidebar.button("Get Data"):
         fig, ax = plt.subplots()
         # Plot all three lines
         ax.plot(df.index, df["Close"], label="Closing Price", color="blue")
-        ax.plot(df.index, df["MA_5"], label="5-Day MA", color="orange", linestyle="--")
-        ax.plot(df.index, df["MA_20"], label="20-Day MA", color="green", linestyle="--")
+        ax.plot(df.index, df["ma_5"], label="5-Day MA", color="orange", linestyle="--")
+        ax.plot(df.index, df["ma_20"], label="20-Day MA", color="green", linestyle="--")
 
         # Format the chart
         ax.set_xlabel("Date")
@@ -113,8 +113,8 @@ if st.sidebar.button("Get Data"):
         ax.set_title(f"{ticker} Closing Price")
         st.pyplot(fig)
         
-        plt.plot(df["MA_5"], label="MA_5")
-        plt.plot(df["MA_20"], label="MA_20")
+        plt.plot(df["MA_5"], label="ma_5")
+        plt.plot(df["MA_20"], label="ma_20")
 
         # Calculate daily returns
         daily_returns = close.pct_change()
