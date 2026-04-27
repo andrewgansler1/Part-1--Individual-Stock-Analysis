@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import requests_cache
 
 # Set page title and layout
 st.set_page_config(page_title="Stock Data Extraction App", layout='wide')
