@@ -91,20 +91,7 @@ if st.sidebar.button("Get Data"):
             st.success("Oversold (Possible Buy Signal)")
         else:
             st.info("Neutral")
-
-        # Display Stock Data
-        st.subheader("Historical Price Data")
-        st.dataframe(df)
-
-        # Plot the closing price
-        st.subheader("Closing Price")
-        fig, ax = plt.subplots()
-        ax.plot(df.index, df["Close"])
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Closing Price")
-        ax.set_title(f"{ticker} Closing Price")
-        st.pyplot(fig)
-        
+            
         # Plot the closing price with MAs
         st.subheader("Closing Price with Moving Averages")
         fig, ax = plt.subplots()
