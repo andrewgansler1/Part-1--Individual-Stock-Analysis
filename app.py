@@ -54,13 +54,13 @@ else:
     current_rsi = df["RSI"].iloc[-1]
     current_vol = df["Volatility"].iloc[-1]
 
-    # Determine Trend
+    # Determine Trend (FIXED: Removed the word "Trend" to fit the UI column)
     if current_price > ma_20_current and current_price > ma_50_current:
-        trend = "Upward Trend"
+        trend = "Upward"
     elif current_price < ma_20_current and current_price < ma_50_current:
-        trend = "Downward Trend"
+        trend = "Downward"
     else:
-        trend = "Mixed Trend"
+        trend = "Mixed"
 
     # Determine Volatility Category
     if pd.isna(current_vol): # Handle cases where there isn't enough data yet
@@ -114,10 +114,10 @@ else:
 
     # Branch A: RSI < 30 (Oversold)
     if current_rsi < 30:
-        if trend == "Upward Trend":
+        if trend == "Upward":
             recommendation = "STRONG BUY"
             reason = "Dip in a bullish trend. Excellent risk/reward."
-        elif trend in ["Mixed Trend", "Downward Trend"]:
+        elif trend in ["Mixed", "Downward"]:
             if vol_category in ["Low", "Medium"]:
                 recommendation = "BUY"
                 reason = "Oversold bounce expected, but trade with caution against the trend."
@@ -127,10 +127,10 @@ else:
 
     # Branch B: RSI > 70 (Overbought)
     elif current_rsi > 70:
-        if trend == "Downward Trend":
+        if trend == "Downward":
             recommendation = "STRONG SELL"
             reason = "Overbought in a macro bear trend. High probability of rejection."
-        elif trend in ["Upward Trend", "Mixed Trend"]:
+        elif trend in ["Upward", "Mixed"]:
             if vol_category == "High":
                 recommendation = "SELL"
                 reason = "Erratic and overextended. Good time to lock in profits."
@@ -140,10 +140,10 @@ else:
 
     # Branch C: RSI between 30 and 70 (Neutral)
     else:
-        if trend == "Upward Trend":
+        if trend == "Upward":
             recommendation = "HOLD"
             reason = "Healthy uptrend with neutral momentum. Stay the course."
-        elif trend == "Downward Trend":
+        elif trend == "Downward":
             recommendation = "SELL"
             reason = "Bleeding out in a downtrend with no signs of a reversal."
         else:  
