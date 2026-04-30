@@ -1,139 +1,124 @@
-import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import streamlit as st
 
 # 1. Page Configuration
-st.set_page_config(page_title="Stock Data Extraction App", layout='wide')
-st.title("📈 Stock Data Extraction App")
-st.write("Extract stock market prices and analyze trends using a ticker symbol.")
+st.set_page_config(page_title="Portfolio Analysis", layout='wide')
+st.title("📈 Portfolio Data and Interpretation")
+st.write("Compare your custom portfolio against the S&P 500 benchmark.")
 
-# 2. Sidebar Inputs
-st.sidebar.header("User Input")
-ticker = st.sidebar.text_input("Enter Ticker", "AAPL").upper()
-start_date = st.sidebar.date_input("Start Date", pd.to_datetime("today") - pd.DateOffset(months=6))
-end_date = st.sidebar.date_input("End Date", pd.to_datetime("today"))
+# 2. Construct the portfolio
+Portfolio = {
+    'TSLA': 0.25,
+    'NFLX': 0.20,
+    'BABA': 0.20,
+    'GME': 0.15,
+    'PLTR': 0.20 
+}
 
-# 3. Data Fetching (Optimized with Caching)
+# 3. Define Date Range
+end_date = pd.Timestamp.now().normalize()
+start_date = end_date - pd.DateOffset(years=1)
+
+# 4. Fetch Stock Data (Optimized with Caching)
 @st.cache_data
-def load_data(t, start, end):
-    """Fetches historical data and caches it to prevent unnecessary API calls."""
-    stock = yf.Ticker(t)
-    return stock.history(start=start, end=end)
-
-df = load_data(ticker, start_date, end_date)
-
-# 4. Main App Logic
-if df.empty:
-    st.error("No data found. Please check the ticker symbol or date range.")
-else:
-    st.success(f"Data successfully extracted for {ticker}")
-
-    # --- Calculations ---
-    # Moving Averages
-    df["ma_5"] = df["Close"].rolling(window=5).mean()
-    df["ma_20"] = df["Close"].rolling(window=20).mean()
-    df["ma_50"] = df["Close"].rolling(window=50).mean()
-
-    # RSI (Rolling calculation over the whole dataset)
-    delta = df["Close"].diff()
-    gains = delta.clip(lower=0).rolling(window=14).mean()
-    losses = -delta.clip(upper=0).rolling(window=14).mean()
-    rs = gains / losses
-    df["RSI"] = 100 - (100 / (1 + rs))
-
-    # Volatility
-    daily_returns = df["Close"].pct_change()
-    vol_20 = daily_returns.rolling(window=20).std()
-    df["Volatility"] = vol_20 * np.sqrt(252)
-
-    # Get latest values for display
-    current_price = df["Close"].iloc[-1]
-    ma_20_current = df["ma_20"].iloc[-1]
-    ma_50_current = df["ma_50"].iloc[-1]
-    current_rsi = df["RSI"].iloc[-1]
-    current_vol = df["Volatility"].iloc[-1]
-
-    # Determine Trend
-    if current_price > ma_20_current and current_price > ma_50_current:
-        trend = "Upward Trend"
-    elif current_price < ma_20_current and current_price < ma_50_current:
-        trend = "Downward Trend"
-    else:
-        trend = "Mixed Trend"
-
-    # Determine Volatility Category
-    if pd.isna(current_vol): # Handle cases where there isn't enough data yet
-        vol_category = "Unknown"
-    elif current_vol > 0.40:
-        vol_category = "High"
-    elif current_vol >= 0.25:
-        vol_category = "Medium"
-    else:
-        vol_category = "Low"
-
-    # --- Dashboard Display ---
-    st.header("Market Overview")
+def fetch_data(portfolio_dict, start, end):
+    """Fetches stock and benchmark data, caches the result to speed up the app."""
+    prices = pd.DataFrame()
+    for symbol in portfolio_dict:
+        data = yf.download(symbol, start=start, end=end, progress=False, auto_adjust=False, multi_level_index=False)
+        prices[symbol] = data['Adj Close']
+        
+    benchmark_data = yf.download('^GSPC', start=start, end=end, progress=False, auto_adjust=False, multi_level_index=False)
+    benchmark = benchmark_data['Adj Close']
     
-    # Use columns to create a neat top-level dashboard
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Current Price", f"${current_price:.2f}")
-    with col2:
-        st.metric("Current Trend", trend)
-    with col3:
-        st.metric("14-Day RSI", f"{current_rsi:.2f}")
-    with col4:
-        st.metric("Annualized Volatility", f"{current_vol:.2%}" if not pd.isna(current_vol) else "N/A")
+    return prices, benchmark
 
-    st.divider()
+prices, benchmark = fetch_data(Portfolio, start_date, end_date)
 
-    # --- Interactive Chart ---
-    st.subheader(f"Closing Price & Moving Averages for {ticker}")
-    # Prepare data for Streamlit's native interactive chart
-    chart_data = df[["Close", "ma_5", "ma_20", "ma_50"]].rename(
-        columns={"Close": "Price", "ma_5": "5-Day MA", "ma_20": "20-Day MA", "ma_50": "50-Day MA"}
-    )
-    st.line_chart(chart_data)
+# 5. Calculate Daily Returns
+daily_returns = prices.pct_change().dropna()
+benchmark_returns = benchmark.pct_change().dropna()
 
-    # --- RSI Context ---
-    if current_rsi > 70:
-        st.error("RSI Status: Overbought (Possible Sell Signal)")
-    elif current_rsi < 30:
-        st.success("RSI Status: Oversold (Possible Buy Signal)")
-    else:
-        st.info("RSI Status: Neutral")
+# Align the index dates so both datasets match perfectly
+common_index = daily_returns.index.intersection(benchmark_returns.index)
+daily_returns = daily_returns.loc[common_index]
+benchmark_returns = benchmark_returns.loc[common_index]
 
-    st.divider()
+# Calculate weighted portfolio returns
+portfolio_returns = pd.Series(0.0, index=common_index)
+for symbol, weight in Portfolio.items():
+    portfolio_returns += weight * daily_returns[symbol]
 
-    # --- Trading Recommendation ---
-    st.subheader("Final Trading Recommendation")
+# 6. Calculate Metrics
+# Cumulative Totals
+portfolio_total = (1 + portfolio_returns).prod() - 1
+benchmark_total = (1 + benchmark_returns).prod() - 1
 
-    recommendation = "HOLD"  # Default fallback
-    reason = "Awaiting clear signals."
+# Volatility (Risk)
+portfolio_vol = portfolio_returns.std() * np.sqrt(252)
+benchmark_vol = benchmark_returns.std() * np.sqrt(252)
 
-    # Branch A: RSI < 30 (Oversold)
-    if current_rsi < 30:
-        if trend == "Upward Trend":
-            recommendation = "STRONG BUY"
-            reason = "Dip in a bullish trend. Excellent risk/reward."
-        elif trend in ["Mixed Trend", "Downward Trend"]:
-            if vol_category in ["Low", "Medium"]:
-                recommendation = "BUY"
-                reason = "Oversold bounce expected, but trade with caution against the trend."
-            else:  
-                recommendation = "HOLD"
-                reason = "Oversold, but high volatility in a downtrend indicates a falling knife. Wait for stabilization."
+# Sharpe Ratio (Efficiency)
+risk_free_rate = 0.03
+portfolio_sharpe = (portfolio_total - risk_free_rate) / portfolio_vol
+benchmark_sharpe = (benchmark_total - risk_free_rate) / benchmark_vol
 
-    # Branch B: RSI > 70 (Overbought)
-    elif current_rsi > 70:
-        if trend == "Downward Trend":
-            recommendation = "STRONG SELL"
-            reason = "Overbought in a macro bear trend. High probability of rejection."
-        elif trend in ["Upward Trend", "Mixed Trend"]:
-            if vol_category == "High":
-                recommendation = "SELL"
-                reason = "Erratic and overextended. Good time to lock in profits."
-            else:  
-                recommendation = "HOLD"
-                reason = "Overbought, but strong uptrends can remain overbought. Tighten stop-losses and let it run."
+# 7. Visualizations (New Feature)
+st.header("Performance Dashboard")
+st.divider()
+
+st.subheader("Cumulative Growth Over Time")
+# Calculate the running cumulative return over time for the chart
+cum_portfolio = (1 + portfolio_returns).cumprod() - 1
+cum_benchmark = (1 + benchmark_returns).cumprod() - 1
+
+# Combine into one DataFrame for Streamlit to plot easily
+chart_data = pd.DataFrame({
+    'Portfolio': cum_portfolio,
+    'S&P 500 (Benchmark)': cum_benchmark
+})
+st.line_chart(chart_data)
+
+# 8. Dashboard Display
+st.subheader("Key Metrics")
+perf_diff = portfolio_total - benchmark_total
+
+# Row 1: Return Metrics
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric(label="Portfolio Return", value=f"{portfolio_total:.2%}", delta=f"{perf_diff:.2%}")
+with col2:
+    st.metric(label="Benchmark Return", value=f"{benchmark_total:.2%}")
+with col3:
+    st.metric(label="Relative Performance", value=f"{perf_diff:.2%}")
+
+st.write("") 
+
+# Row 2: Risk Metrics
+col4, col5, col6, col7 = st.columns(4)
+with col4:
+    st.metric(label="Portfolio Volatility", value=f"{portfolio_vol:.2%}")
+with col5:
+    st.metric(label="Benchmark Volatility", value=f"{benchmark_vol:.2%}")
+with col6:
+    st.metric(label="Portfolio Sharpe", value=f"{portfolio_sharpe:.2f}")
+with col7:
+    st.metric(label="Benchmark Sharpe", value=f"{benchmark_sharpe:.2f}")
+
+# 9. Dynamic Portfolio Interpretation Summary
+st.divider()
+st.subheader("Analysis Summary")
+
+# Determine dynamic text based on metrics
+perf_text = "outperformed" if portfolio_total > benchmark_total else "underperformed"
+risk_text = "more" if portfolio_vol > benchmark_vol else "less"
+eff_text = "more" if portfolio_sharpe > benchmark_sharpe else "less"
+
+st.info(f"""
+**Based on the metrics above:**
+* **Performance:** The portfolio **{perf_text}** the benchmark.
+* **Risk:** The portfolio was **{risk_text}** risky (exhibiting {risk_text} volatility) compared to the broader market.
+* **Efficiency:** The portfolio was **{eff_text}** efficient, generating a {eff_text} risk-adjusted return according to the Sharpe ratio.
+""")
